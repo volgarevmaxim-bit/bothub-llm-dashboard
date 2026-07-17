@@ -12,10 +12,12 @@
 
 ### 2. Загрузить в дашборд
 
-1. Откройте файл **[`bothub-llm-dashboard.html`](https://raw.githubusercontent.com/volgarevmaxim-bit/bothub-llm-dashboard/main/bothub-llm-dashboard.html)** в браузере (или кликните правой кнопкой → «Сохранить как…»)
-2. Перетащите скачанный XLSX-файл в зону загрузки  
+1. Скачайте репозиторий одной кнопкой:  
+   **[⬇ bothub-llm-dashboard.zip](https://github.com/volgarevmaxim-bit/bothub-llm-dashboard/archive/refs/heads/main.zip)**
+2. Распакуйте архив, откройте файл **`bothub-llm-dashboard.html`** в браузере
+3. Перетащите скачанный XLSX-файл в зону загрузки  
    — или нажмите «Выбрать файл»
-3. Дашборд обновится автоматически
+4. Дашборд обновится автоматически
 
 ## Что показывает
 

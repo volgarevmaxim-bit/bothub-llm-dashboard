@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BotHub v2.0 — Анализ затрат LLM</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #F7F6F2;
+    --surface: #FFFFFF;
+    --border: #D4D1CA;
+    --text: #28251D;
+    --muted: #7A7974;
+    --faint: #BAB9B4;
+    --primary: #01696F;
+    --c1: #20808D;
+    --c2: #A84B2F;
+    --c3: #1B474D;
+    --c4: #6E9FAA;
+    --c5: #944454;
+    --c6: #D19900;
+    --c7: #848456;
+    --c8: #6E522B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  header {
+    background: #1C1B19;
+    color: #CDCCCA;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header h1 { font-size: 17px; font-weight: 600; color: #fff; }
+  header .badge-v2 {
+    display: inline-block;
+    background: #1B474D;
+    color: #A8D8DD;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+    letter-spacing: 0.03em;
+  }
+  header span { font-size: 12px; color: #797876; }
+
+  .container { max-width: 1180px; margin: 0 auto; padding: 24px 20px; }
+
+  .notice {
+    background: #EFF8F8;
+    border: 1px solid #9FD0D5;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #015A5F;
+    margin-bottom: 18px;
+  }
+
+  /* Upload */
+  .upload-section {
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    text-align: center;
+    margin-bottom: 22px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .upload-section:hover { border-color: var(--primary); background: #f0f9f8; }
+  .upload-section input { display: none; }
+  .upload-section .icon { font-size: 26px; margin-bottom: 6px; }
+  .upload-section p { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .upload-section strong { color: var(--text); font-size: 14px; }
+  .upload-btn {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 7px 18px;
+    background: var(--primary);
+    color: white;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  /* KPI */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .kpi-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .kpi-card .value { font-size: 26px; font-weight: 700; line-height: 1; }
+  .kpi-card .sub { font-size: 11px; color: var(--faint); margin-top: 5px; }
+  .kpi-card .trend { font-size: 11px; font-weight: 600; margin-top: 3px; }
+
+  /* Charts */
+  .charts-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; margin-bottom: 18px; }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .chart-card.wide { grid-column: 1 / -1; }
+  .chart-card h2 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .chart-card .subtitle { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .chart-wrap { position: relative; }
+
+  /* Token badges */
+  .token-info {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .token-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #F0EFEB;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 11.5px;
+  }
+  .token-chip strong { font-weight: 600; }
+  .token-chip .num { font-variant-numeric: tabular-nums; }
+
+  /* Table */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    overflow-x: auto;
+  }
+  .table-card h2 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .table-card .subtitle { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th {
+    text-align: left;
+    padding: 7px 10px;
+    border-bottom: 2px solid var(--border);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  td { padding: 8px 10px; border-bottom: 1px solid #EEEDE9; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #FAFAF7; }
+  .model-name { font-weight: 500; }
+  .provider-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-size: 10.5px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-anthropic { background: #FFF3E0; color: #8B4513; }
+  .badge-openrouter { background: #E3F0F8; color: #004D60; }
+  .badge-azure { background: #E8EFF9; color: #003588; }
+  .badge-bothub { background: #D4EED7; color: #1B6B3F; }
+  .bar-bg { background: #ECEAE5; border-radius: 3px; height: 5px; margin-top: 4px; min-width: 60px; }
+  .bar-fill { height: 5px; border-radius: 3px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .cost-high { color: #A84B2F; font-weight: 700; }
+  .cost-mid { color: #C18800; font-weight: 600; }
+  .cache-green { color: #1B7A3D; font-weight: 700; }
+  .cache-yellow { color: #B8860B; font-weight: 700; }
+  .cache-red { color: #B22222; font-weight: 700; }
+
+  @media (max-width: 768px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .charts-grid { grid-template-columns: 1fr; }
+    .chart-card.wide { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>BotHub<span class="badge-v2">v2.0</span> · Анализ затрат LLM</h1>
+  <span id="header-period">—</span>
+</header>
+
+<div class="container">
+
+  <div class="notice">
+    Курс: 8 500 000 caps = 1 500 руб. (≈ 0,000176 руб/cap) · Загрузите XLSX-выгрузку BotHub для обновления
+  </div>
+
+  <div class="upload-section" id="dropzone" onclick="document.getElementById('fileInput').click()">
+    <div class="icon">📂</div>
+    <strong>Загрузить выгрузку BotHub (XLSX)</strong>
+    <p>Перетащите файл или нажмите для выбора</p>
+    <div class="upload-btn">Выбрать файл</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
+  </div>
+
+  <div class="kpi-row" id="kpi-row"></div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h2>Затраты по модели, руб.</h2>
+      <div class="subtitle">Ранкинг по стоимости за период</div>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h2>Доля по типу вызова (caps)</h2>
+      <div class="subtitle">Распределение по семействам моделей</div>
+      <div class="chart-wrap"><canvas id="providerChart"></canvas></div>
+    </div>
+    <div class="chart-card wide">
+      <h2>Активность моделей по времени (caps/час)</h2>
+      <div class="subtitle">Временной ряд для всех моделей</div>
+      <div class="chart-wrap"><canvas id="timeChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <h2>Детализация по моделям</h2>
+    <div class="subtitle">Все метрики за выбранный период</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Модель</th>
+          <th>Провайдер</th>
+          <th>Транзакций</th>
+          <th>Caps (всего)</th>
+          <th>Стоимость, руб.</th>
+          <th>Доля, %</th>
+          <th>Input токены</th>
+          <th>Output токены</th>
+          <th>Кэш токены</th>
+          <th>Кэш хит, %</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const RATE = 1500 / 8500000;
+const PALETTE = ['#20808D','#A84B2F','#1B474D','#6E9FAA','#944454','#D19900','#848456','#6E522B','#01696F','#5591C7','#A13544','#437A22','#7A39BB','#C08000'];
+
+let charts = {};
+let colorMap = {};
+
+function buildColorMap(models) {
+  const m = {};
+  models.forEach((model, i) => m[model.model] = PALETTE[i % PALETTE.length]);
+  return m;
+}
+
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return Math.round(n).toLocaleString('ru-RU');
+}
+
+function badgeClass(p) {
+  if (!p) return 'badge-azure';
+  const l = p.toLowerCase();
+  if (l.includes('anthropic')) return 'badge-anthropic';
+  if (l.includes('openrouter')) return 'badge-openrouter';
+  if (l.includes('bothub')) return 'badge-bothub';
+  return 'badge-azure';
+}
+
+function renderKPIs(s) {
+  const fmt = (d) => {
+    try { return new Date(d).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}); } catch(e) { return d; }
+  };
+  document.getElementById('header-period').textContent = fmt(s.date_from) + ' — ' + fmt(s.date_to);
+
+  const pctUsed = (s.total_caps / 8500000 * 100).toFixed(2);
+  const remaining = Math.max(0, 8500000 - s.total_caps);
+
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi-card">
+      <div class="label">Всего caps потрачено</div>
+      <div class="value num">${fmtNum(s.total_caps)}</div>
+      <div class="sub">${pctUsed}% от тарифа (8 500 000)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Стоимость итого</div>
+      <div class="value num">${s.total_cost_rub.toFixed(2)} ₽</div>
+      <div class="sub">из 1 500 ₽ тарифа</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Запросов к API</div>
+      <div class="value num">${s.total_transactions.toLocaleString('ru-RU')}</div>
+      <div class="sub">транзакций за период</div>
+    </div>
+  `;
+}
+
+function renderBarChart(models) {
+  const ctx = document.getElementById('barChart');
+  if (charts.bar) charts.bar.destroy();
+
+  const h = Math.max(220, models.length * 32);
+  ctx.style.height = h + 'px';
+  ctx.height = h;
+
+  charts.bar = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: models.map(m => m.model),
+      datasets: [{
+        data: models.map(m => m.cost_rub),
+        backgroundColor: models.map(m => colorMap[m.model]),
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const m = models[ctx.dataIndex];
+              return [` ${ctx.parsed.x.toFixed(2)} ₽`, ` ${m.cost_pct.toFixed(1)}% от общего`, ` ${fmtNum(m.total_caps)} caps`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#EEEDE9' },
+          ticks: { callback: v => v.toFixed(2) + ' ₽', font: { size: 11 } }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
+        }
+      },
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+}
+
+function renderCallTypeDonut(models) {
+  const ctx = document.getElementById('providerChart');
+  if (charts.prov) charts.prov.destroy();
+  ctx.style.height = '300px';
+  ctx.height = 300;
+
+  // Group models by family
+  function classifyModel(name) {
+    const l = name.toLowerCase();
+    if (l.startsWith('tts')) return 'TTS (озвучка)';
+    if (l.startsWith('whisper')) return 'Whisper (распознавание)';
+    if (l.includes('deepseek')) return 'DeepSeek';
+    if (l.includes('claude')) return 'Claude';
+    if (l.includes('glm')) return 'GLM';
+    if (l.includes('qwen')) return 'Qwen';
+    if (l.includes('gpt') || l.includes('o3') || l.includes('o4')) return 'OpenAI';
+    return 'Прочее';
+  }
+
+  const groups = {};
+  models.forEach(m => {
+    const cat = classifyModel(m.model);
+    if (!groups[cat]) groups[cat] = 0;
+    groups[cat] += m.total_caps;
+  });
+
+  const entries = Object.entries(groups).sort((a, b) => b[1] - a[1]);
+  const labels = entries.map(e => e[0]);
+  const data = entries.map(e => e[1]);
+
+  const PALETTE_TYPES = ['#1B474D','#20808D','#944454','#D19900','#848456','#6E9FAA','#A84B2F'];
+
+  charts.prov = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: PALETTE_TYPES.slice(0, labels.length), borderWidth: 2, borderColor: '#FFFFFF' }]
+    },
+    options: {
+      cutout: '58%',
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 14 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const total = data.reduce((s, v) => s + v, 0);
+              return [` ${fmtNum(data[ctx.dataIndex])} caps`, ` ${(data[ctx.dataIndex] / total * 100).toFixed(1)}%`];
+            }
+          }
+        }
+      },
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+}
+
+function renderTimeChart(ts) {
+  const ctx = document.getElementById('timeChart');
+  if (charts.time) charts.time.destroy();
+  ctx.style.height = '220px';
+  ctx.height = 220;
+
+  const allTimes = new Set();
+  Object.values(ts).forEach(arr => arr.forEach(p => allTimes.add(p.time)));
+  const sorted = [...allTimes].sort();
+
+  const labels = sorted.map(t => {
+    try {
+      return new Date(t).toLocaleString('ru-RU', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    } catch(e) { return t; }
+  });
+
+  const datasets = Object.entries(ts).map(([model, arr]) => {
+    const map = Object.fromEntries(arr.map(p => [p.time, p.caps]));
+    const c = colorMap[model] || PALETTE[0];
+    return {
+      label: model,
+      data: sorted.map(t => map[t] ?? null),
+      borderColor: c,
+      backgroundColor: c + '18',
+      fill: false,
+      tension: 0.35,
+      pointRadius: 4,
+      spanGaps: false,
+      borderWidth: 2,
+    };
+  });
+
+  charts.time = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } }
+      },
+      scales: {
+        x: { grid: { color: '#EEEDE9' }, ticks: { font: { size: 10 }, maxTicksLimit: 14 } },
+        y: { grid: { color: '#EEEDE9' }, ticks: { font: { size: 11 }, callback: v => fmtNum(v) } }
+      },
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+}
+
+function renderTable(models) {
+  const maxCaps = Math.max(...models.map(m => m.total_caps));
+  document.getElementById('tableBody').innerHTML = models.map((m, i) => {
+    const pct = m.total_caps / maxCaps * 100;
+    const costCls = m.cost_pct > 30 ? 'cost-high' : m.cost_pct > 5 ? 'cost-mid' : '';
+    const rankColor = colorMap[m.model] || PALETTE[i % PALETTE.length];
+    const totalTokens = m.input_tokens + m.output_tokens;
+    const cacheHit = totalTokens > 0 ? (m.cached_tokens / totalTokens * 100) : 0;
+    let cacheCls = 'cache-red';
+    if (cacheHit > 25) cacheCls = 'cache-green';
+    else if (cacheHit >= 10) cacheCls = 'cache-yellow';
+    return `<tr>
+      <td class="model-name" style="border-left: 3px solid ${rankColor}; padding-left: 8px">${m.model}</td>
+      <td><span class="provider-badge ${badgeClass(m.provider)}">${m.provider}</span></td>
+      <td class="num">${m.transactions}</td>
+      <td class="num">
+        ${fmtNum(m.total_caps)}
+        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%; background:${rankColor}"></div></div>
+      </td>
+      <td class="num ${costCls}">${m.cost_rub.toFixed(2)} ₽</td>
+      <td class="num">${m.cost_pct.toFixed(2)}%</td>
+      <td class="num">${m.input_tokens > 0 ? fmtNum(m.input_tokens) : '—'}</td>
+      <td class="num">${m.output_tokens > 0 ? fmtNum(m.output_tokens) : '—'}</td>
+      <td class="num">${m.cached_tokens > 0 ? fmtNum(m.cached_tokens) : '—'}</td>
+      <td class="num ${cacheCls}">${cacheHit > 0 ? cacheHit.toFixed(1) + '%' : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAll(data) {
+  colorMap = buildColorMap(data.models);
+  renderKPIs(data.summary);
+  renderBarChart(data.models);
+  renderCallTypeDonut(data.models);
+  renderTimeChart(data.timeseries);
+  renderTable(data.models);
+}
+
+// ─── Process rows from BotHub XLSX format ───
+// Columns: Дата (UTC+0), CAPS, Бесплатные CAPS (Telegram), Ассистент,
+//          model_id, Входных токенов, Кэшированных токенов, Токенов создания кэша,
+//          Выходных токенов, Провайдер, API-ключ, Пользователь
+function processRows(rows) {
+  const clean = rows.filter(r => {
+    const model = r['model_id'];
+    const caps = parseFloat(r['CAPS']);
+    return model && caps > 0;
+  });
+
+  // --- Models ---
+  const modelMap = {};
+  clean.forEach(r => {
+    const key = r['model_id'];
+    if (!modelMap[key]) modelMap[key] = {
+      model: key,
+      provider: r['Провайдер'] || 'Unknown',
+      transactions: 0, total_caps: 0,
+      input_tokens: 0, output_tokens: 0, cached_tokens: 0
+    };
+    const m = modelMap[key];
+    m.transactions++;
+    m.total_caps += parseFloat(r['CAPS']) || 0;
+    m.input_tokens   += parseInt(r['Входных токенов'] || 0, 10) || 0;
+    m.output_tokens  += parseInt(r['Выходных токенов'] || 0, 10) || 0;
+    m.cached_tokens  += parseInt(r['Кэшированных токенов'] || 0, 10) || 0;
+  });
+
+  const models = Object.values(modelMap).map(m => ({
+    ...m,
+    cost_rub: m.total_caps * RATE,
+    avg_caps: m.total_caps / m.transactions,
+  })).sort((a, b) => b.total_caps - a.total_caps);
+
+  const totalCaps = models.reduce((s, m) => s + m.total_caps, 0);
+  models.forEach(m => m.cost_pct = totalCaps > 0 ? (m.total_caps / totalCaps * 100) : 0);
+
+  // --- Providers ---
+  const provMap = {};
+  clean.forEach(r => {
+    const p = r['Провайдер'] || 'Unknown';
+    if (!provMap[p]) provMap[p] = { provider: p, total_caps: 0, transactions: 0 };
+    provMap[p].total_caps += parseFloat(r['CAPS']) || 0;
+    provMap[p].transactions++;
+  });
+
+  // --- Timeseries (all models, bucket by hour) ---
+  const tsMap = {};
+  clean.forEach(r => {
+    const model = r['model_id'];
+    if (!tsMap[model]) tsMap[model] = {};
+    const raw = r['Дата (UTC+0)'];
+    let dt;
+    if (raw instanceof Date) {
+      dt = new Date(raw);
+    } else if (typeof raw === 'number') {
+      dt = new Date((raw - 25569) * 86400000);
+    } else if (typeof raw === 'string') {
+      dt = new Date(raw);
+    } else {
+      return;
+    }
+    if (isNaN(dt)) return;
+    dt.setMinutes(0, 0, 0);
+    const key = dt.toISOString();
+    tsMap[model][key] = (tsMap[model][key] || 0) + (parseFloat(r['CAPS']) || 0);
+  });
+
+  const timeseries = {};
+  const allModelKeys = Object.keys(tsMap).sort((a, b) => {
+    const capsA = modelMap[a] ? modelMap[a].total_caps : 0;
+    const capsB = modelMap[b] ? modelMap[b].total_caps : 0;
+    return capsB - capsA;
+  });
+  allModelKeys.forEach(m => {
+    timeseries[m] = Object.entries(tsMap[m])
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([time, caps]) => ({ time, caps: Math.round(caps * 100) / 100 }));
+  });
+
+  // --- Date range ---
+  const dates = clean.map(r => {
+    const raw = r['Дата (UTC+0)'];
+    if (raw instanceof Date && !isNaN(raw)) return raw;
+    if (typeof raw === 'number') return new Date((raw - 25569) * 86400000);
+    if (typeof raw === 'string') { const d = new Date(raw); return isNaN(d) ? null : d; }
+    return null;
+  }).filter(Boolean);
+
+  const totalInput = clean.reduce((s, r) => s + (parseInt(r['Входных токенов'] || 0, 10) || 0), 0);
+  const totalOutput = clean.reduce((s, r) => s + (parseInt(r['Выходных токенов'] || 0, 10) || 0), 0);
+  const totalCached = clean.reduce((s, r) => s + (parseInt(r['Кэшированных токенов'] || 0, 10) || 0), 0);
+
+  const summary = {
+    total_caps: Math.round(totalCaps * 100) / 100,
+    total_cost_rub: Math.round(totalCaps * RATE * 10000) / 10000,
+    total_transactions: clean.length,
+    date_from: dates.length ? new Date(Math.min(...dates)).toISOString() : '',
+    date_to:   dates.length ? new Date(Math.max(...dates)).toISOString() : '',
+    total_input_tokens: totalInput,
+    total_output_tokens: totalOutput,
+    total_cached_tokens: totalCached,
+  };
+
+  return { summary, models, providers: Object.values(provMap), timeseries };
+}
+
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { raw: false, defval: null });
+    const data = processRows(rows);
+    renderAll(data);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Drag & drop
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor = '#01696F'; dz.style.background = '#f0f9f8'; });
+dz.addEventListener('dragleave', () => { dz.style.borderColor = ''; dz.style.background = ''; });
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.style.borderColor = ''; dz.style.background = '';
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile({ target: { files: [file] } });
+});
+
+// Built-in data (from transactions-2026-07-09)
+const BUILTIN = {"summary":{"total_caps":16111690.23,"total_cost_rub":2843.2395,"total_transactions":384,"date_from":"2026-07-08T12:27:14","date_to":"2026-07-09T08:42:59","total_input_tokens":23963197,"total_output_tokens":178562,"total_cached_tokens":10852544},"models":[{"model":"claude-sonnet-5","provider":"OpenRouter","transactions":135,"total_caps":14524626.37,"cost_rub":2563.1694,"cost_pct":90.15,"avg_caps":107589.82,"input_tokens":9787455,"output_tokens":91839,"cached_tokens":0},{"model":"glm-5.2","provider":"OpenRouter","transactions":96,"total_caps":1337703.13,"cost_rub":236.0653,"cost_pct":8.3,"avg_caps":13934.41,"input_tokens":4228323,"output_tokens":22700,"cached_tokens":2861632},{"model":"deepseek-v4-pro","provider":"OpenRouter","transactions":126,"total_caps":167499.13,"cost_rub":29.5587,"cost_pct":1.04,"avg_caps":1329.36,"input_tokens":7975850,"output_tokens":41390,"cached_tokens":7578496},{"model":"deepseek-v4-flash","provider":"OpenRouter","transactions":27,"total_caps":81861.6,"cost_rub":14.4462,"cost_pct":0.51,"avg_caps":3031.91,"input_tokens":1461569,"output_tokens":22633,"cached_tokens":412416}],"timeseries":{"claude-sonnet-5":[{"time":"2026-07-08T14:00:00.000Z","caps":2712159.45},{"time":"2026-07-08T17:00:00.000Z","caps":7634895.98},{"time":"2026-07-08T18:00:00.000Z","caps":4177570.95}],"glm-5.2":[{"time":"2026-07-08T12:00:00.000Z","caps":414758.03},{"time":"2026-07-08T13:00:00.000Z","caps":677821.54},{"time":"2026-07-08T14:00:00.000Z","caps":217841.49},{"time":"2026-07-08T17:00:00.000Z","caps":27282.07}],"deepseek-v4-pro":[{"time":"2026-07-08T18:00:00.000Z","caps":29556.31},{"time":"2026-07-08T19:00:00.000Z","caps":127822.72},{"time":"2026-07-08T20:00:00.000Z","caps":9757.21},{"time":"2026-07-09T08:00:00.000Z","caps":362.88}],"deepseek-v4-flash":[{"time":"2026-07-09T08:00:00.000Z","caps":81861.6}]}};
+
+window.addEventListener('DOMContentLoaded', () => renderAll(BUILTIN));
+</script>
+</body>
+</html>

@@ -3,6 +3,8 @@
 **Анализ затрат LLM-моделей** из выгрузки BotHub.  
 Работает локально в браузере — **без сервера, без установки**.
 
+![Скриншот дашборда](https://raw.githubusercontent.com/volgarevmaxim-bit/bothub-llm-dashboard/main/bothub-llm-dashboard.png)
+
 ## Как использовать
 
 ### 1. Скачать данные
